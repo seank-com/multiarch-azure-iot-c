@@ -1,0 +1,34 @@
+FROM multiarch/ubuntu-core:x86_64-xenial AS base
+
+FROM base AS tools
+
+RUN apt-get update && \
+  apt-get install -y \
+    git \
+    cmake \
+    build-essential \
+    curl \
+    libcurl4-openssl-dev \
+    libssl-dev uuid-dev \
+    wget \
+    nano
+
+RUN mkdir /src
+
+WORKDIR /src
+
+RUN cmake --version
+RUN gcc --version
+
+RUN wget http://curl.haxx.se/download/curl-7.63.0.tar.gz
+RUN tar -xvf curl-7.63.0.tar.gz
+WORKDIR /src/curl-7.63.0
+RUN ./configure
+RUN make
+RUN make install 
+
+WORKDIR /src
+
+FROM tools AS sdk
+
+RUN git clone -b lts_10_2018 --recursive https://github.com/Azure/azure-iot-sdk-c.git
