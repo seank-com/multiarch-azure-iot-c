@@ -1,7 +1,5 @@
 FROM multiarch/ubuntu-core:x86_64-xenial AS base
 
-FROM base AS tools
-
 RUN apt-get update && \
   apt-get install -y \
     git \
@@ -27,8 +25,38 @@ RUN ./configure
 RUN make
 RUN make install 
 
+FROM base AS build
+
 WORKDIR /src
 
-FROM tools AS sdk
-
 RUN git clone -b lts_10_2018 --recursive https://github.com/Azure/azure-iot-sdk-c.git
+
+RUN mkdir -p /src/azure-iot-sdk-c/bin
+
+WORKDIR /src/azure-iot-sdk-c/bin
+
+RUN cmake ../
+
+RUN make
+
+RUN make install
+
+RUN mkdir -p /src/sample/bin
+
+WORKDIR /src/sample/bin
+
+COPY CMakeLists.txt /src/sample/CMakeLists.txt
+COPY sample.c /src/sample/sample.c
+
+RUN cmake ../
+
+RUN make
+
+FROM base AS production
+
+COPY --from=build /src/sample/bin/sample_app /root
+
+WORKDIR /root
+
+CMD ["./sample_app"]
+
