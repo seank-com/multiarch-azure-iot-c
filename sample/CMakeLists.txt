@@ -8,9 +8,23 @@ include_directories(${AZUREIOT_INC_FOLDER})
 
 set(sample_application_c_files
     ./sample.c
+    ./cloud2device.c
+    ./device2cloud.c
+    ./devicetwin.c
+    ./directmethod.c
+    ./utils.c
 )
 
-add_executable(sample_app ${sample_application_c_files})
+set(sample_application_h_files
+    ./sample.h
+    ./cloud2device.h
+    ./device2cloud.h
+    ./devicetwin.h
+    ./directmethod.h
+    ./utils.h
+)
+
+add_executable(sample_app ${sample_application_c_files} ${sample_application_h_files})
 
 target_link_libraries(sample_app
     serializer
@@ -26,6 +40,7 @@ target_link_libraries(sample_app
     pthread
     curl
     ssl
+    uuid
     crypto
     m
 )
