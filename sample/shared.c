@@ -1,58 +1,99 @@
 #include "shared.h"
 #include "devicetwin.h"
 
+#include "azure_c_shared_utility/lock.h"
+
 static IOTHUB_CLIENT_CONNECTION_STATUS s_status = IOTHUB_CLIENT_CONNECTION_AUTHENTICATED;
 static TwinSettings* s_settings = NULL;
+static LOCK_HANDLE s_lock = NULL;
 
 void Shared_Init(char* softwareVersion, unsigned int defaultTelemetryCadence)
 {
+  s_lock = Lock_Init();
+  if (s_lock == NULL)
+  {
+    (void)printf("ERROR: Failed to init lock");
+  }
   s_settings = DeviceTwin_CreateTwinSettings(softwareVersion, defaultTelemetryCadence);
 }
 
 void Shared_Deinit()
 {
+  Lock_Deinit(s_lock);
+  s_lock = NULL;
   DeviceTwin_DeleteTwinSettings(s_settings);
 }
 
 IOTHUB_CLIENT_CONNECTION_STATUS Shared_GetStatus()
 {
-  return s_status;
+  IOTHUB_CLIENT_CONNECTION_STATUS result = 0;
+  if (s_lock != NULL)
+  {
+    Lock(s_lock);
+    result = s_status;
+    Unlock(s_lock);
+  }
+  return result;
 }
 
 int Shared_SetStatus(IOTHUB_CLIENT_CONNECTION_STATUS status)
-{
-  if (s_status != status)
+{ 
+  int result = SHARED_VALUE_UNCHANGED;
+  if (s_lock != NULL)
   {
-    s_status = status;
-    return SHARED_VALUE_CHANGED;
+    Lock(s_lock);
+    if (s_status != status)
+    {
+      s_status = status;
+      result = SHARED_VALUE_CHANGED;
+    }
+    Unlock(s_lock);
   }
-  return SHARED_VALUE_UNCHANGED;
+  return result;
 }
 
 const char* Shared_GetVersion()
 {
-  if (s_settings != NULL)
+  char* result = NULL;
+  if (s_lock != NULL)
   {
-    return s_settings->softwareVersion;
+    Lock(s_lock);
+    if (s_settings != NULL)
+    {
+      result = s_settings->softwareVersion;
+    }
+    Unlock(s_lock);
   }
-  return NULL;
+  return result;
 }
 
 unsigned int Shared_GetTelemetryCadence()
 {
-  if (s_settings != NULL)
+  unsigned int result = 0;
+  if (s_lock != NULL)
   {
-    return s_settings->telemetryCadence;
+    Lock(s_lock);
+    if (s_settings != NULL)
+    {
+      result = s_settings->telemetryCadence;
+    }
+    Unlock(s_lock);
   }
-  return 0;
+  return result;
 }
 
 int Shared_SetTelemetryCadence(unsigned int telemetryCadence)
 {
-  if (s_settings != NULL && s_settings->telemetryCadence != telemetryCadence)
+  int result = SHARED_VALUE_UNCHANGED;
+  if (s_lock != NULL)
   {
-    s_settings->telemetryCadence = telemetryCadence;
-    return SHARED_VALUE_CHANGED;
+    Lock(s_lock);
+    if (s_settings != NULL && s_settings->telemetryCadence != telemetryCadence)
+    {
+      s_settings->telemetryCadence = telemetryCadence;
+      result = SHARED_VALUE_CHANGED;
+    }
+    Unlock(s_lock);
   }
-  return SHARED_VALUE_UNCHANGED;
+  return result;
 }
