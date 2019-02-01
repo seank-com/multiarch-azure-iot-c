@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 2.8.11)
 
+#set (CMAKE_C_FLAGS "--std=c99 -ggdb ${CMAKE_C_FLAGS}")
 set (CMAKE_C_FLAGS "--std=c99 ${CMAKE_C_FLAGS}")
 
 set(AZUREIOT_INC_FOLDER ".." "/usr/local/include/azureiot" "/usr/local/include/azureiot/inc")
