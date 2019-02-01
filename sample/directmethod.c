@@ -1,5 +1,5 @@
 #include "directmethod.h"
-#include "sample.h"
+#include "shared.h"
 
 #include <stdlib.h> // malloc
 
@@ -18,7 +18,7 @@ static int deviceMethodCallback(const char* method_name, const unsigned char* pa
         *response = malloc(*response_size);
         (void)memcpy(*response, deviceMethodResponse, *response_size);
 
-        g_status = IOTHUB_CLIENT_CONNECTION_UNAUTHENTICATED;
+        Shared_SetStatus(IOTHUB_CLIENT_CONNECTION_UNAUTHENTICATED);
         
         result = 200;
     }

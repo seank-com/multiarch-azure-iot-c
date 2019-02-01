@@ -2,13 +2,21 @@ FROM multiarch/ubuntu-core:arm64-xenial AS base
 
 RUN apt-get update && \
   apt-get install -y \
+    libcurl3
+
+FROM base AS development
+
+RUN apt-get update && \
+  apt-get install -y \
     git \
     cmake \
     build-essential \
     curl \
     libcurl4-openssl-dev \
-    libssl-dev uuid-dev \
+    libssl-dev \
+    uuid-dev \
     wget \
+    gdbserver \
     nano
 
 RUN mkdir /src
@@ -25,31 +33,25 @@ RUN ./configure
 RUN make
 RUN make install 
 
-FROM base AS build
 
 WORKDIR /src
 
 RUN git clone -b lts_10_2018 --recursive https://github.com/Azure/azure-iot-sdk-c.git
 
 RUN mkdir -p /src/azure-iot-sdk-c/bin
-
 WORKDIR /src/azure-iot-sdk-c/bin
-
 RUN cmake ../
-
 RUN make
-
 RUN make install
 
+COPY sample/ /src/sample/
+WORKDIR /src/sample
+
+FROM development AS build
+
 RUN mkdir -p /src/sample/bin
-
 WORKDIR /src/sample/bin
-
-COPY CMakeLists.txt /src/sample/CMakeLists.txt
-COPY sample.c /src/sample/sample.c
-
 RUN cmake ../
-
 RUN make
 
 FROM base AS production

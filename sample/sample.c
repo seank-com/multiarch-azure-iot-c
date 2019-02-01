@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 
+#include "shared.h"
 #include "device2cloud.h"
 #include "cloud2device.h"
 #include "devicetwin.h"
@@ -10,17 +11,16 @@
 #include "iothubtransportmqtt.h"
 #include "azure_c_shared_utility/threadapi.h"
 
-IOTHUB_CLIENT_CONNECTION_STATUS g_status = IOTHUB_CLIENT_CONNECTION_AUTHENTICATED;
 
 /* Paste in the your iothub device connection string  */
-const char* connectionString = "[connection string]";
+const char* connectionString = "HostName=seank.azure-devices.net;DeviceId=seank;SharedAccessKey=ywVFO6ZXrT2TubiOidT0ZC1Jf5JlAX0xaULNexJQ2bw=";
 
 static void connection_status_callback(IOTHUB_CLIENT_CONNECTION_STATUS result, IOTHUB_CLIENT_CONNECTION_STATUS_REASON reason, void* user_context)
 {
     (void)reason;
     (void)user_context;
 
-    g_status = result;
+    Shared_SetStatus(result);
 
     if (result == IOTHUB_CLIENT_CONNECTION_AUTHENTICATED)
     {
@@ -63,10 +63,10 @@ static int connection_loop(void)
             (void)DirectMethod_Init(iotHubClientHandle);
 
 
-            while(g_status == IOTHUB_CLIENT_CONNECTION_AUTHENTICATED)
+            while(Shared_GetStatus() == IOTHUB_CLIENT_CONNECTION_AUTHENTICATED)
             {
                 sendDevice2CloudMessage(iotHubClientHandle);
-                ThreadAPI_Sleep(g_settings.telemetryCadence);
+                ThreadAPI_Sleep(Shared_GetTelemetryCadence());
             }
             
             (void)printf("Initializing DeviceTwin\n");
@@ -94,13 +94,13 @@ static int connection_loop(void)
 int main(void)
 {
     int result = 0;
-    g_settings.softwareVersion = "1.0.0";
-    g_settings.telemetryCadence = 15 * 1000;
-
+    
+    Shared_Init("1.0.0", 15 * 1000);
     while(result == 0)
     {
         printf("Starting connection_loop");
         result = connection_loop();
     }
+    Shared_Deinit();
     return result;
 }

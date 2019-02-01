@@ -12,11 +12,12 @@ set(sample_application_c_files
     ./device2cloud.c
     ./devicetwin.c
     ./directmethod.c
+    ./shared.c
     ./utils.c
 )
 
 set(sample_application_h_files
-    ./sample.h
+    ./shared.h
     ./cloud2device.h
     ./device2cloud.h
     ./devicetwin.h

@@ -1,140 +1,139 @@
 #include "devicetwin.h"
+#include "shared.h"
 
-//#include <stdio.h>
-#include <stdlib.h> // malloc
-#include <unistd.h> // access
-// #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "parson.h"
 
 #define CONFIG_FILE "./config.json"
 
-TwinSettings g_settings = {0};
-
 static IOTHUB_DEVICE_CLIENT_HANDLE s_deviceConnection = NULL;
 
-static char* serializeToJson()
+TwinSettings* DeviceTwin_CreateTwinSettings(char* softwareVersion, unsigned int telemetryCadence)
 {
-  char* result;
+  TwinSettings* settings = malloc(sizeof(TwinSettings));
+  if (settings == NULL)
+  {
+    (void)printf("ERROR: Failed to allocate memory\n");
+    return NULL;
+  }
 
+  (void)memset(settings,0,sizeof(TwinSettings));
+  if (softwareVersion != NULL)
+  {
+    settings->softwareVersion =  malloc(strlen(softwareVersion)+1);
+    if (settings->softwareVersion != NULL)
+    {
+      (void)strcpy(settings->softwareVersion, softwareVersion);
+    }
+  }
+
+  if (telemetryCadence != 0)
+  {
+    settings->telemetryCadence = telemetryCadence;
+  }
+
+  return settings;
+}
+
+void DeviceTwin_DeleteTwinSettings(TwinSettings* settings)
+{
+  if (settings != NULL)
+  {
+    if (settings->softwareVersion != NULL)
+    {
+      free(settings->softwareVersion);
+    }
+    free(settings);
+  }
+}
+
+static JSON_Value* createJSONValue()
+{
   JSON_Value* root_value = json_value_init_object();
   JSON_Object* root_object = json_value_get_object(root_value);
 
   // Only reported properties:
-  (void)json_object_set_string(root_object, "softwareVersion", g_settings.softwareVersion);
-  (void)json_object_set_number(root_object, "telemetryCadence", g_settings.telemetryCadence);
+  (void)json_object_set_string(root_object, "softwareVersion", Shared_GetVersion());
+  (void)json_object_set_number(root_object, "telemetryCadence", Shared_GetTelemetryCadence());
 
-  result = json_serialize_to_string(root_value);
+  return root_value;
+}
+
+static char* serializeToJson()
+{
+  JSON_Value* root_value = createJSONValue();
+  char* result = json_serialize_to_string(root_value);
 
   json_value_free(root_value);
-
   return result;
 }
 
-static void parseFromJson(const char* json, DEVICE_TWIN_UPDATE_STATE update_state, TwinSettings* pSettings)
+static void parseFromValue(JSON_Value* root_value, DEVICE_TWIN_UPDATE_STATE update_state, TwinSettings* settings)
 {
-  JSON_Value* root_value = NULL;
-  JSON_Object* root_object = NULL;
-
-  root_value = json_parse_string(json);
-  root_object = json_value_get_object(root_value);
-
-  // Only desired properties:
-  JSON_Value* telemetryCadence;
-
-  if (update_state == DEVICE_TWIN_UPDATE_COMPLETE)
+  if (root_value != NULL && settings != NULL)
   {
-    telemetryCadence = json_object_dotget_value(root_object, "desired.telemetryCadence");
-  }
-  else
-  {
-    telemetryCadence = json_object_get_value(root_object, "telemetryCadence");
-  }
+    JSON_Object* root_object = json_value_get_object(root_value);
 
-  if (telemetryCadence != NULL)
-  {
-    pSettings->telemetryCadence = (uint32_t)json_value_get_number(telemetryCadence);
-  }
+    // Only desired properties:
+    JSON_Value* telemetryCadence;
+    if (update_state == DEVICE_TWIN_UPDATE_COMPLETE)
+    {
+      telemetryCadence = json_object_dotget_value(root_object, "desired.telemetryCadence");
+    }
+    else
+    {
+      telemetryCadence = json_object_get_value(root_object, "telemetryCadence");
+    }
 
+    if (telemetryCadence != NULL)
+    {
+      settings->telemetryCadence = (uint32_t)json_value_get_number(telemetryCadence);
+    }
+  }
+}
+
+static TwinSettings* parseFromString(const char* json, DEVICE_TWIN_UPDATE_STATE update_state)
+{
+  JSON_Value* root_value = json_parse_string(json);
+  TwinSettings* settings = DeviceTwin_CreateTwinSettings(NULL, 0);
+  
+  parseFromValue(root_value, update_state, settings);
+  
   json_value_free(root_value);
+  return settings;
+}
+
+static TwinSettings* parseFromFile(const char* filename)
+{
+  JSON_Value* root_value = json_parse_file(filename);
+  TwinSettings* settings = DeviceTwin_CreateTwinSettings(NULL, 0);
+  
+  parseFromValue(root_value, DEVICE_TWIN_UPDATE_PARTIAL, settings);
+  
+  json_value_free(root_value);
+  return settings;
 }
 
 static void loadConfig()
 {
-  int result = access(CONFIG_FILE, F_OK);
-  if (result == 0)
+  TwinSettings* settings = parseFromFile(CONFIG_FILE);
+  if (settings != NULL)
   {
-    FILE* f = fopen(CONFIG_FILE, "r");
-    if (f != NULL)
+    if (settings->telemetryCadence != 0)
     {
-        (void)fseek(f, 0, SEEK_END);
-        size_t fs = ftell(f) + 1;
-        (void)fseek(f, 0, SEEK_SET);
-        if (fs > 0)
-        {
-          char* buffer = malloc(fs);
-          if (buffer != NULL)
-          {
-            size_t rs = fread(buffer, 1, fs - 1, f);
-            if (rs == (fs - 1))
-            {
-              (void)parseFromJson(buffer, DEVICE_TWIN_UPDATE_PARTIAL, &g_settings);
-            }
-            else
-            {
-              printf("Error: failed to read config file\n");
-            }
-            free(buffer);
-          }
-          else
-          {
-            printf("Error: failed to allocate memory\n");
-          }
-        }
-        else
-        {
-          printf("Error: config file empty\n");
-        }
-        fclose(f);
+      Shared_SetTelemetryCadence(settings->telemetryCadence);
     }
-    else
-    {
-      printf("Error: failed to open config file\n");
-    }
-  }
-  else
-  {
-    printf("Warn: config file does not exist\n");
+    DeviceTwin_DeleteTwinSettings(settings);
   }
 }
 
 static void saveConfig()
 {
-  char* buffer = serializeToJson();
-  if (buffer)
-  {
-    FILE* f = fopen(CONFIG_FILE, "w+");
-    if (f != NULL)
-    {
-      size_t len =  strlen(buffer);
-      size_t ws = fwrite(buffer, 1, len, f);
-      if (ws != len)
-      {
-        printf("Error: Cannot write file\n");
-      }
-      fclose(f);
-    }
-    else
-    {
-      printf("Error: Could not open file for writing\n");
-    }
-    free(buffer);
-  }
-  else
-  {
-    printf("Error: failed to serial object\n");
-  }
-  
+  JSON_Value* root_value = createJSONValue();
+  json_serialize_to_file(root_value, CONFIG_FILE);
+  json_value_free(root_value);
 }
 
 static void reportedStateCallback(int status_code, void* userContextCallback)
@@ -162,17 +161,14 @@ static void deviceTwinCallback(DEVICE_TWIN_UPDATE_STATE update_state, const unsi
   (void)size;
   (void)userContextCallback;
 
-  TwinSettings changes = {0};
-  
-  (void)parseFromJson((const char*)payLoad, update_state, &changes);
-
-  if (changes.telemetryCadence != 0)
+  TwinSettings* changes = parseFromString((const char*)payLoad, update_state);
+  if(changes != NULL && changes->telemetryCadence != 0)
   {
-    printf("Received a new telemetryCadence = %d\n", changes.telemetryCadence);
-    g_settings.telemetryCadence = changes.telemetryCadence;
-
-    (void)saveConfig();
-    (void)updateReportedState();
+    if (Shared_SetTelemetryCadence(changes->telemetryCadence) == SHARED_VALUE_CHANGED)
+    {
+      saveConfig();
+      updateReportedState();
+    }
   }
 }
 
@@ -180,7 +176,8 @@ void DeviceTwin_Init(IOTHUB_DEVICE_CLIENT_HANDLE deviceConnection)
 {
   s_deviceConnection = deviceConnection;
   loadConfig();
-  (void)updateReportedState();
+  updateReportedState();
+  saveConfig();
   (void)IoTHubDeviceClient_SetDeviceTwinCallback(deviceConnection, deviceTwinCallback, NULL);
 }
 

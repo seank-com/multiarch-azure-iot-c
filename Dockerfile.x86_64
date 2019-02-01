@@ -45,6 +45,9 @@ RUN make
 RUN make install
 
 COPY sample/ /src/sample/
+WORKDIR /src/sample
+
+FROM development AS build
 
 RUN mkdir -p /src/sample/bin
 WORKDIR /src/sample/bin
@@ -53,7 +56,7 @@ RUN make
 
 FROM base AS production
 
-COPY --from=development /src/sample/bin/sample_app /root
+COPY --from=build /src/sample/bin/sample_app /root
 
 WORKDIR /root
 
